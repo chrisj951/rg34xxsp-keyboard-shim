@@ -51,11 +51,7 @@ int setup_uinput()
         BTN_START,   // Start
         BTN_MODE,    // Guide
         BTN_THUMBL,  // L3
-        BTN_THUMBR,   // R3,
-        BTN_DPAD_UP, 
-        BTN_DPAD_DOWN, 
-        BTN_DPAD_LEFT, 
-        BTN_DPAD_RIGHT  
+        BTN_THUMBR   // R3,
     };
 
     for (size_t i = 0; i < sizeof(buttons)/sizeof(buttons[0]); i++)
@@ -154,21 +150,8 @@ int main()
             emit(ufd, EV_KEY, code, ev.value);
         }
         else if (ev.type == EV_ABS) {
-            // Map D-pad ABS_HAT0X/Y to buttons
-            if (ev.code == ABS_HAT0X) {
-                if (ev.value < 0) emit(ufd, EV_KEY, BTN_DPAD_LEFT, 1);
-                else            emit(ufd, EV_KEY, BTN_DPAD_LEFT, 0);
-
-                if (ev.value > 0) emit(ufd, EV_KEY, BTN_DPAD_RIGHT, 1);
-                else              emit(ufd, EV_KEY, BTN_DPAD_RIGHT, 0);
-            }
-            else if (ev.code == ABS_HAT0Y) {
-                if (ev.value < 0) emit(ufd, EV_KEY, BTN_DPAD_UP, 1);
-                else              emit(ufd, EV_KEY, BTN_DPAD_UP, 0);
-
-                if (ev.value > 0) emit(ufd, EV_KEY, BTN_DPAD_DOWN, 1);
-                else               emit(ufd, EV_KEY, BTN_DPAD_DOWN, 0);
-            }
+            // Forward ABS_HAT0X/Y directly for SDL2 360 mapping
+            emit(ufd, EV_ABS, ev.code, ev.value);
         }
 
         emit(ufd, EV_SYN, SYN_REPORT, 0);
