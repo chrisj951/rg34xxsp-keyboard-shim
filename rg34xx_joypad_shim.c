@@ -9,7 +9,7 @@
 #include <errno.h>
 #include <sys/time.h>
 
-#define INPUT_DEV "/dev/input/event1"
+#define INPUT_DEV "/dev/input/event1"  // your source device
 
 void emit(int fd, int type, int code, int value)
 {
@@ -33,12 +33,11 @@ int setup_uinput()
         return -1;
     }
 
-    /* Event types */
+    // Event types
     ioctl(fd, UI_SET_EVBIT, EV_KEY);
     ioctl(fd, UI_SET_EVBIT, EV_ABS);
     ioctl(fd, UI_SET_EVBIT, EV_SYN);
 
-    /* Xbox 360 buttons */
     int buttons[] = {
         BTN_SOUTH,   // A
         BTN_EAST,    // B
@@ -46,58 +45,54 @@ int setup_uinput()
         BTN_NORTH,   // Y
         BTN_TL,      // LB
         BTN_TR,      // RB
+        BTN_TL2,     // L2
+        BTN_TR2,     // R2
         BTN_SELECT,  // Back
         BTN_START,   // Start
         BTN_MODE,    // Guide
         BTN_THUMBL,  // L3
-        BTN_THUMBR,  // R3
-        BTN_DPAD_UP,
-        BTN_DPAD_DOWN,
-        BTN_DPAD_LEFT,
-        BTN_DPAD_RIGHT
+        BTN_THUMBR   // R3
     };
 
     for (size_t i = 0; i < sizeof(buttons)/sizeof(buttons[0]); i++)
         ioctl(fd, UI_SET_KEYBIT, buttons[i]);
 
-    /* Axes */
+    // Axes (sticks + triggers + D-pad)
     int axes[] = {
         ABS_X, ABS_Y,   // Left stick
         ABS_RX, ABS_RY, // Right stick
-        ABS_Z, ABS_RZ   // Triggers
+        ABS_Z, ABS_RZ,  // Triggers
+        ABS_HAT0X, ABS_HAT0Y // D-pad
     };
-
     for (size_t i = 0; i < sizeof(axes)/sizeof(axes[0]); i++)
         ioctl(fd, UI_SET_ABSBIT, axes[i]);
 
+    // Fill uinput device info
     struct uinput_user_dev uidev;
     memset(&uidev, 0, sizeof(uidev));
 
     snprintf(uidev.name, UINPUT_MAX_NAME_SIZE, "Microsoft X-Box 360 pad");
 
-    /* Xbox 360 USB IDs */
     uidev.id.bustype = BUS_USB;
     uidev.id.vendor  = 0x045e;
     uidev.id.product = 0x028e;
     uidev.id.version = 0x0114;
 
-    /* Left stick */
-    uidev.absmin[ABS_X] = -32768;
-    uidev.absmax[ABS_X] = 32767;
-    uidev.absmin[ABS_Y] = -32768;
-    uidev.absmax[ABS_Y] = 32767;
+    // Left stick
+    uidev.absmin[ABS_X] = -32768; uidev.absmax[ABS_X] = 32767;
+    uidev.absmin[ABS_Y] = -32768; uidev.absmax[ABS_Y] = 32767;
 
-    /* Right stick */
-    uidev.absmin[ABS_RX] = -32768;
-    uidev.absmax[ABS_RX] = 32767;
-    uidev.absmin[ABS_RY] = -32768;
-    uidev.absmax[ABS_RY] = 32767;
+    // Right stick
+    uidev.absmin[ABS_RX] = -32768; uidev.absmax[ABS_RX] = 32767;
+    uidev.absmin[ABS_RY] = -32768; uidev.absmax[ABS_RY] = 32767;
 
-    /* Triggers */
-    uidev.absmin[ABS_Z] = 0;
-    uidev.absmax[ABS_Z] = 255;
-    uidev.absmin[ABS_RZ] = 0;
-    uidev.absmax[ABS_RZ] = 255;
+    // Triggers
+    uidev.absmin[ABS_Z] = 0; uidev.absmax[ABS_Z] = 255;
+    uidev.absmin[ABS_RZ] = 0; uidev.absmax[ABS_RZ] = 255;
+
+    // D-pad
+    uidev.absmin[ABS_HAT0X] = -1; uidev.absmax[ABS_HAT0X] = 1;
+    uidev.absmin[ABS_HAT0Y] = -1; uidev.absmax[ABS_HAT0Y] = 1;
 
     if (write(fd, &uidev, sizeof(uidev)) < 0) {
         perror("write uinput_user_dev");
@@ -136,19 +131,27 @@ int main()
             continue;
 
         if (ev.type == EV_KEY) {
-            emit(ufd, ev.type, ev.code, ev.value);
+            int code = ev.code;
+
+            // Remap non-standard source keys to Xbox buttons
+            switch (ev.code) {
+                case BTN_SOUTH: code = BTN_EAST; break;  //A
+                case BTN_EAST: code = BTN_SOUTH; break; //B
+                case BTN_C: code = BTN_WEST; break;  //Y
+                case BTN_NORTH: code = BTN_NORTH; break;  //X
+                case BTN_WEST: code = BTN_TL; break;  //L1
+                case BTN_SELECT:   code = BTN_TL2;    break; //L2
+                case BTN_Z:   code = BTN_TR;    break; //R1
+                case BTN_START:   code = BTN_TR2;    break; //R2
+                case BTN_TR:   code = BTN_START;    break; //Start
+                case BTN_TL:   code = BTN_SELECT;    break; //Select
+                case KEY_GOTO:   code = BTN_MODE;    break; //Menu
+            }
+            emit(ufd, EV_KEY, code, ev.value);
         }
         else if (ev.type == EV_ABS) {
-            /* Map D-pad axes to buttons */
-            if (ev.code == ABS_HAT0X) {
-                emit(ufd, EV_KEY, (ev.value < 0) ? BTN_DPAD_LEFT  : 0, (ev.value < 0));
-                emit(ufd, EV_KEY, (ev.value > 0) ? BTN_DPAD_RIGHT : 0, (ev.value > 0));
-            } else if (ev.code == ABS_HAT0Y) {
-                emit(ufd, EV_KEY, (ev.value < 0) ? BTN_DPAD_UP    : 0, (ev.value < 0));
-                emit(ufd, EV_KEY, (ev.value > 0) ? BTN_DPAD_DOWN  : 0, (ev.value > 0));
-            } else {
-                emit(ufd, EV_ABS, ev.code, ev.value);
-            }
+            // Forward everything, including ABS_HAT0X/Y
+            emit(ufd, EV_ABS, ev.code, ev.value);
         }
 
         emit(ufd, EV_SYN, SYN_REPORT, 0);
