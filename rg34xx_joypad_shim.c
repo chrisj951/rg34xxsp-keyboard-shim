@@ -91,6 +91,8 @@ int setup_uinput()
     // D-pad axes
     uidev.absmin[ABS_HAT0X] = -1; uidev.absmax[ABS_HAT0X] = 1;
     uidev.absmin[ABS_HAT0Y] = -1; uidev.absmax[ABS_HAT0Y] = 1;
+    uidev.absflat[ABS_HAT0X] = 0; uidev.absfuzz[ABS_HAT0X] = 0;
+    uidev.absflat[ABS_HAT0Y] = 0; uidev.absfuzz[ABS_HAT0Y] = 0;
 
     if (write(fd, &uidev, sizeof(uidev)) < 0) {
         perror("write uinput_user_dev");
