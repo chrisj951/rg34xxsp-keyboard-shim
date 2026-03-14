@@ -33,38 +33,24 @@ int setup_uinput()
         return -1;
     }
 
-    // Event types
+    // Enable key, absolute, and sync events
     ioctl(fd, UI_SET_EVBIT, EV_KEY);
     ioctl(fd, UI_SET_EVBIT, EV_ABS);
     ioctl(fd, UI_SET_EVBIT, EV_SYN);
-    ioctl(fd, UI_SET_PROPBIT, INPUT_PROP_DIRECT);
 
+    // Register buttons
     int buttons[] = {
-        BTN_SOUTH,   // A
-        BTN_EAST,    // B
-        BTN_WEST,    // X
-        BTN_NORTH,   // Y
-        BTN_TL,      // LB
-        BTN_TR,      // RB
-        BTN_TL2,     // L2
-        BTN_TR2,     // R2
-        BTN_SELECT,  // Back
-        BTN_START,   // Start
-        BTN_MODE,    // Guide
-        BTN_THUMBL,  // L3
-        BTN_THUMBR,  // R3
-        BTN_DPAD_UP, 
-        BTN_DPAD_DOWN, 
-        BTN_DPAD_LEFT, 
-        BTN_DPAD_RIGHT
+        BTN_SOUTH, BTN_EAST, BTN_NORTH, BTN_WEST,
+        BTN_TL, BTN_TR, BTN_TL2, BTN_TR2,
+        BTN_SELECT, BTN_START, BTN_MODE,
+        BTN_THUMBL, BTN_THUMBR
     };
-
-    for (size_t i = 0; i < sizeof(buttons)/sizeof(buttons[0]); i++)
+    for (int i = 0; i < sizeof(buttons)/sizeof(buttons[0]); i++)
         ioctl(fd, UI_SET_KEYBIT, buttons[i]);
 
-    // Axes (sticks + triggers + D-pad)
+    // Register all axes including the D-pad (Hats)
     int axes[] = { ABS_X, ABS_Y, ABS_RX, ABS_RY, ABS_Z, ABS_RZ, ABS_HAT0X, ABS_HAT0Y };
-    for (size_t i = 0; i < sizeof(axes)/sizeof(axes[0]); i++)
+    for (int i = 0; i < sizeof(axes)/sizeof(axes[0]); i++)
         ioctl(fd, UI_SET_ABSBIT, axes[i]);
 
     struct uinput_user_dev uidev;
@@ -74,41 +60,42 @@ int setup_uinput()
     uidev.id.bustype = BUS_USB;
     uidev.id.vendor  = 0x045e;
     uidev.id.product = 0x028e;
-    uidev.id.version = 0x0114;
+    uidev.id.version = 1;
 
-    // Left stick
+    // Standard Analog Sticks
     uidev.absmin[ABS_X] = -32768; uidev.absmax[ABS_X] = 32767;
     uidev.absmin[ABS_Y] = -32768; uidev.absmax[ABS_Y] = 32767;
-
-    // Right stick
     uidev.absmin[ABS_RX] = -32768; uidev.absmax[ABS_RX] = 32767;
     uidev.absmin[ABS_RY] = -32768; uidev.absmax[ABS_RY] = 32767;
 
-    // Triggers
+    // Triggers (Standard Xbox 360 range is 0-255)
     uidev.absmin[ABS_Z] = 0; uidev.absmax[ABS_Z] = 255;
     uidev.absmin[ABS_RZ] = 0; uidev.absmax[ABS_RZ] = 255;
 
-    // D-pad axes
-    uidev.absmin[ABS_HAT0X] = -1; uidev.absmax[ABS_HAT0X] = 1;
-    uidev.absmin[ABS_HAT0Y] = -1; uidev.absmax[ABS_HAT0Y] = 1;
-    uidev.absflat[ABS_HAT0X] = 0; uidev.absfuzz[ABS_HAT0X] = 0;
-    uidev.absflat[ABS_HAT0Y] = 0; uidev.absfuzz[ABS_HAT0Y] = 0;
+    // THE CRITICAL FIX: D-pad Hats with explicit Flat/Fuzz
+    uidev.absmin[ABS_HAT0X] = -1; 
+    uidev.absmax[ABS_HAT0X] = 1;
+    uidev.absflat[ABS_HAT0X] = 0; // SDL2 often ignores hats if flat is not 0
+    uidev.absfuzz[ABS_HAT0X] = 0;
+
+    uidev.absmin[ABS_HAT0Y] = -1; 
+    uidev.absmax[ABS_HAT0Y] = 1;
+    uidev.absflat[ABS_HAT0Y] = 0;
+    uidev.absfuzz[ABS_HAT0Y] = 0;
 
     if (write(fd, &uidev, sizeof(uidev)) < 0) {
         perror("write uinput_user_dev");
-        close(fd);
         return -1;
     }
 
     if (ioctl(fd, UI_DEV_CREATE) < 0) {
         perror("UI_DEV_CREATE");
-        close(fd);
         return -1;
     }
 
-    sleep(1); // allow device node creation
     return fd;
 }
+
 
 int main()
 {
