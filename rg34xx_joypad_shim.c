@@ -51,7 +51,11 @@ int setup_uinput()
         BTN_START,   // Start
         BTN_MODE,    // Guide
         BTN_THUMBL,  // L3
-        BTN_THUMBR   // R3
+        BTN_THUMBR,   // R3,
+        BTN_DPAD_UP, 
+        BTN_DPAD_DOWN, 
+        BTN_DPAD_LEFT, 
+        BTN_DPAD_RIGHT  
     };
 
     for (size_t i = 0; i < sizeof(buttons)/sizeof(buttons[0]); i++)
