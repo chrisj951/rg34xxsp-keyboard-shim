@@ -37,6 +37,7 @@ int setup_uinput()
     ioctl(fd, UI_SET_EVBIT, EV_KEY);
     ioctl(fd, UI_SET_EVBIT, EV_ABS);
     ioctl(fd, UI_SET_EVBIT, EV_SYN);
+    ioctl(fd, UI_SET_PROPBIT, INPUT_PROP_DIRECT);
 
     int buttons[] = {
         BTN_SOUTH,   // A
@@ -154,16 +155,13 @@ int main()
                     emit(ufd, EV_ABS, ev.code, ev.value);
                     break;
 
+                // D-pad logic simplified
                 case ABS_HAT0X:
                     emit(ufd, EV_ABS, ABS_HAT0X, ev.value);
-                    emit(ufd, EV_KEY, BTN_DPAD_LEFT,  (ev.value < 0) ? 1 : 0);
-                    emit(ufd, EV_KEY, BTN_DPAD_RIGHT, (ev.value > 0) ? 1 : 0);
                     break;
 
                 case ABS_HAT0Y:
                     emit(ufd, EV_ABS, ABS_HAT0Y, ev.value);
-                    emit(ufd, EV_KEY, BTN_DPAD_UP,   (ev.value < 0) ? 1 : 0);
-                    emit(ufd, EV_KEY, BTN_DPAD_DOWN, (ev.value > 0) ? 1 : 0);
                     break;
             }
         }
