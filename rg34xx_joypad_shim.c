@@ -141,10 +141,12 @@ int main()
         }
         else if (ev.type == EV_ABS) {
             if (ev.code == ABS_HAT0X) {
+                emit(ufd, EV_ABS, ABS_HAT0X, ev.value); // keep axis
                 emit(ufd, EV_KEY, BTN_DPAD_LEFT,  (ev.value < 0) ? 1 : 0);
                 emit(ufd, EV_KEY, BTN_DPAD_RIGHT, (ev.value > 0) ? 1 : 0);
             }
             else if (ev.code == ABS_HAT0Y) {
+                emit(ufd, EV_ABS, ABS_HAT0Y, ev.value); // keep axis
                 emit(ufd, EV_KEY, BTN_DPAD_UP,   (ev.value < 0) ? 1 : 0);
                 emit(ufd, EV_KEY, BTN_DPAD_DOWN, (ev.value > 0) ? 1 : 0);
             }
