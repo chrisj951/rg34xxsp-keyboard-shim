@@ -150,8 +150,21 @@ int main()
             emit(ufd, EV_KEY, code, ev.value);
         }
         else if (ev.type == EV_ABS) {
-            // Forward everything, including ABS_HAT0X/Y
-            emit(ufd, EV_ABS, ev.code, ev.value);
+            // Map D-pad ABS_HAT0X/Y to buttons
+            if (ev.code == ABS_HAT0X) {
+                if (ev.value < 0) emit(ufd, EV_KEY, BTN_DPAD_LEFT, 1);
+                else            emit(ufd, EV_KEY, BTN_DPAD_LEFT, 0);
+
+                if (ev.value > 0) emit(ufd, EV_KEY, BTN_DPAD_RIGHT, 1);
+                else              emit(ufd, EV_KEY, BTN_DPAD_RIGHT, 0);
+            }
+            else if (ev.code == ABS_HAT0Y) {
+                if (ev.value < 0) emit(ufd, EV_KEY, BTN_DPAD_UP, 1);
+                else              emit(ufd, EV_KEY, BTN_DPAD_UP, 0);
+
+                if (ev.value > 0) emit(ufd, EV_KEY, BTN_DPAD_DOWN, 1);
+                else               emit(ufd, EV_KEY, BTN_DPAD_DOWN, 0);
+            }
         }
 
         emit(ufd, EV_SYN, SYN_REPORT, 0);
