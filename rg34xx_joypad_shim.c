@@ -61,16 +61,6 @@ int setup_uinput()
     for (size_t i = 0; i < sizeof(buttons)/sizeof(buttons[0]); i++)
         ioctl(fd, UI_SET_KEYBIT, buttons[i]);
 
-    // Axes (sticks + triggers + D-pad)
-    int axes[] = {
-        ABS_X, ABS_Y,   // Left stick
-        ABS_RX, ABS_RY, // Right stick
-        ABS_Z, ABS_RZ,  // Triggers
-        ABS_HAT0X, ABS_HAT0Y // D-pad
-    };
-    for (size_t i = 0; i < sizeof(axes)/sizeof(axes[0]); i++)
-        ioctl(fd, UI_SET_ABSBIT, axes[i]);
-
     // Fill uinput device info
     struct uinput_user_dev uidev;
     memset(&uidev, 0, sizeof(uidev));
@@ -93,10 +83,6 @@ int setup_uinput()
     // Triggers
     uidev.absmin[ABS_Z] = 0; uidev.absmax[ABS_Z] = 255;
     uidev.absmin[ABS_RZ] = 0; uidev.absmax[ABS_RZ] = 255;
-
-    // D-pad
-    uidev.absmin[ABS_HAT0X] = -1; uidev.absmax[ABS_HAT0X] = 1;
-    uidev.absmin[ABS_HAT0Y] = -1; uidev.absmax[ABS_HAT0Y] = 1;
 
     if (write(fd, &uidev, sizeof(uidev)) < 0) {
         perror("write uinput_user_dev");
@@ -154,23 +140,13 @@ int main()
             emit(ufd, EV_KEY, code, ev.value);
         }
         else if (ev.type == EV_ABS) {
-            // Send as is
-            emit(ufd, EV_ABS, ev.code, ev.value);
-
-            // And Map D-pad ABS_HAT0X/Y to buttons
             if (ev.code == ABS_HAT0X) {
-                if (ev.value < 0) emit(ufd, EV_KEY, BTN_DPAD_LEFT, 1);
-                else            emit(ufd, EV_KEY, BTN_DPAD_LEFT, 0);
-
-                if (ev.value > 0) emit(ufd, EV_KEY, BTN_DPAD_RIGHT, 1);
-                else              emit(ufd, EV_KEY, BTN_DPAD_RIGHT, 0);
+                emit(ufd, EV_KEY, BTN_DPAD_LEFT,  (ev.value < 0) ? 1 : 0);
+                emit(ufd, EV_KEY, BTN_DPAD_RIGHT, (ev.value > 0) ? 1 : 0);
             }
             else if (ev.code == ABS_HAT0Y) {
-                if (ev.value < 0) emit(ufd, EV_KEY, BTN_DPAD_UP, 1);
-                else              emit(ufd, EV_KEY, BTN_DPAD_UP, 0);
-
-                if (ev.value > 0) emit(ufd, EV_KEY, BTN_DPAD_DOWN, 1);
-                else               emit(ufd, EV_KEY, BTN_DPAD_DOWN, 0);
+                emit(ufd, EV_KEY, BTN_DPAD_UP,   (ev.value < 0) ? 1 : 0);
+                emit(ufd, EV_KEY, BTN_DPAD_DOWN, (ev.value > 0) ? 1 : 0);
             }
         }
 
