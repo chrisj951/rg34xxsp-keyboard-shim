@@ -1,3 +1,4 @@
+// rg34xx_joypad_shim.c
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -10,45 +11,25 @@
 
 #define INPUT_DEV "/dev/input/event1"
 
-// Mapping hardware BTN_* codes to virtual joystick buttons 0-10
-struct keymap {
-    int hw_code;    // hardware BTN_* code
-    int joy_code;   // uinput BTN_JOY* code
-};
-
-struct keymap keys[] = {
-    {304, BTN_JOYSTICK+0},  // A
-    {305, BTN_JOYSTICK+1},  // B
-    {306, BTN_JOYSTICK+2},  // C
-    {307, BTN_JOYSTICK+3},  // X
-    {308, BTN_JOYSTICK+4},  // Y
-    {309, BTN_JOYSTICK+5},  // Z
-    {310, BTN_JOYSTICK+6},  // L1
-    {311, BTN_JOYSTICK+7},  // R1
-    {312, BTN_JOYSTICK+8},  // L2
-    {313, BTN_JOYSTICK+9},  // R2
-    {314, BTN_JOYSTICK+10}, // SELECT
-    {315, BTN_JOYSTICK+11}, // START
-    {316, BTN_JOYSTICK+12}, // HOTKEY / MENU
-};
-
-// Map ABS_HAT0X/Y to SDL2-style hat events
-int hat_x = 0;
-int hat_y = 0;
-
 int setup_uinput() {
     int fd = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
     if(fd < 0) { perror("open /dev/uinput"); return -1; }
 
-    // Enable key events
+    // Mark device as a gamepad
     ioctl(fd, UI_SET_EVBIT, EV_KEY);
     ioctl(fd, UI_SET_EVBIT, EV_ABS);
+    ioctl(fd, UI_SET_PROPBIT, INPUT_PROP_DIRECT);
 
-    // Enable joystick buttons
-    for(int i = 0; i < sizeof(keys)/sizeof(keys[0]); i++)
-        ioctl(fd, UI_SET_KEYBIT, keys[i].joy_code);
+    // Map all gamepad buttons RetroArch expects
+    int btns[] = {
+        BTN_SOUTH, BTN_EAST, BTN_NORTH, BTN_WEST,  // A/B/X/Y
+        BTN_TL, BTN_TR, BTN_TL2, BTN_TR2,          // L/R, L2/R2
+        BTN_START, BTN_SELECT, BTN_MODE            // Start/Select/Menu/Hotkey
+    };
+    for(int i = 0; i < sizeof(btns)/sizeof(btns[0]); i++)
+        ioctl(fd, UI_SET_KEYBIT, btns[i]);
 
-    // Enable hat
+    // D-pad (ABS_HAT0X/Y)
     ioctl(fd, UI_SET_ABSBIT, ABS_HAT0X);
     ioctl(fd, UI_SET_ABSBIT, ABS_HAT0Y);
 
@@ -60,6 +41,7 @@ int setup_uinput() {
     uidev.id.product = 0x5678;
     uidev.id.version = 1;
 
+    // D-pad range
     uidev.absmin[ABS_HAT0X] = -1;
     uidev.absmax[ABS_HAT0X] = 1;
     uidev.absmin[ABS_HAT0Y] = -1;
@@ -81,24 +63,6 @@ void emit(int fd, int type, int code, int value) {
     if(write(fd, &ev, sizeof(ev)) < 0) perror("write event");
 }
 
-void emit_key(int fd, int hw_code, int value) {
-    for(int i = 0; i < sizeof(keys)/sizeof(keys[0]); i++) {
-        if(keys[i].hw_code == hw_code) {
-            emit(fd, EV_KEY, keys[i].joy_code, value);
-            emit(fd, EV_SYN, SYN_REPORT, 0);
-            break;
-        }
-    }
-}
-
-void emit_hat(int fd, int code, int value) {
-    if(code == ABS_HAT0X) hat_x = value;
-    if(code == ABS_HAT0Y) hat_y = value;
-    emit(fd, EV_ABS, ABS_HAT0X, hat_x);
-    emit(fd, EV_ABS, ABS_HAT0Y, hat_y);
-    emit(fd, EV_SYN, SYN_REPORT, 0);
-}
-
 int main() {
     int ufd = setup_uinput();
     if(ufd < 0) return 1;
@@ -110,10 +74,10 @@ int main() {
     while(1) {
         int rd = read(ifd, &ev, sizeof(ev));
         if(rd == sizeof(ev)) {
-            if(ev.type == EV_KEY) {
-                emit_key(ufd, ev.code, ev.value);
-            } else if(ev.type == EV_ABS && (ev.code == ABS_HAT0X || ev.code == ABS_HAT0Y)) {
-                emit_hat(ufd, ev.code, ev.value);
+            // Forward EV_KEY and EV_ABS events
+            if(ev.type == EV_KEY || ev.type == EV_ABS) {
+                emit(ufd, ev.type, ev.code, ev.value);
+                emit(ufd, EV_SYN, SYN_REPORT, 0);
             }
         }
     }
