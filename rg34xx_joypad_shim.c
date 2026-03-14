@@ -15,8 +15,8 @@ void emit(int fd, int type, int code, int value)
 {
     struct input_event ev;
     memset(&ev, 0, sizeof(ev));
-
     gettimeofday(&ev.time, NULL);
+
     ev.type = type;
     ev.code = code;
     ev.value = value;
@@ -51,22 +51,25 @@ int setup_uinput()
         BTN_START,   // Start
         BTN_MODE,    // Guide
         BTN_THUMBL,  // L3
-        BTN_THUMBR,   // R3,
+        BTN_THUMBR,  // R3
         BTN_DPAD_UP, 
         BTN_DPAD_DOWN, 
         BTN_DPAD_LEFT, 
-        BTN_DPAD_RIGHT  
+        BTN_DPAD_RIGHT
     };
 
     for (size_t i = 0; i < sizeof(buttons)/sizeof(buttons[0]); i++)
         ioctl(fd, UI_SET_KEYBIT, buttons[i]);
 
-    // Fill uinput device info
+    // Axes (sticks + triggers + D-pad)
+    int axes[] = { ABS_X, ABS_Y, ABS_RX, ABS_RY, ABS_Z, ABS_RZ, ABS_HAT0X, ABS_HAT0Y };
+    for (size_t i = 0; i < sizeof(axes)/sizeof(axes[0]); i++)
+        ioctl(fd, UI_SET_ABSBIT, axes[i]);
+
     struct uinput_user_dev uidev;
     memset(&uidev, 0, sizeof(uidev));
 
     snprintf(uidev.name, UINPUT_MAX_NAME_SIZE, "Microsoft X-Box 360 pad");
-
     uidev.id.bustype = BUS_USB;
     uidev.id.vendor  = 0x045e;
     uidev.id.product = 0x028e;
@@ -84,6 +87,10 @@ int setup_uinput()
     uidev.absmin[ABS_Z] = 0; uidev.absmax[ABS_Z] = 255;
     uidev.absmin[ABS_RZ] = 0; uidev.absmax[ABS_RZ] = 255;
 
+    // D-pad axes
+    uidev.absmin[ABS_HAT0X] = -1; uidev.absmax[ABS_HAT0X] = 1;
+    uidev.absmin[ABS_HAT0Y] = -1; uidev.absmax[ABS_HAT0Y] = 1;
+
     if (write(fd, &uidev, sizeof(uidev)) < 0) {
         perror("write uinput_user_dev");
         close(fd);
@@ -97,15 +104,13 @@ int setup_uinput()
     }
 
     sleep(1); // allow device node creation
-
     return fd;
 }
 
 int main()
 {
     int ufd = setup_uinput();
-    if (ufd < 0)
-        return 1;
+    if (ufd < 0) return 1;
 
     int ifd = open(INPUT_DEV, O_RDONLY);
     if (ifd < 0) {
@@ -117,38 +122,49 @@ int main()
 
     while (1) {
         int rd = read(ifd, &ev, sizeof(ev));
-        if (rd != sizeof(ev))
-            continue;
+        if (rd != sizeof(ev)) continue;
 
         if (ev.type == EV_KEY) {
             int code = ev.code;
 
-            // Remap non-standard source keys to Xbox buttons
+            // Remap non-standard source keys to Xbox 360 layout
             switch (ev.code) {
                 case BTN_SOUTH: code = BTN_EAST; break;  //A
-                case BTN_EAST: code = BTN_SOUTH; break; //B
-                case BTN_C: code = BTN_WEST; break;  //Y
+                case BTN_EAST:  code = BTN_SOUTH; break;  //B
+                case BTN_C:     code = BTN_WEST;  break;  //Y
                 case BTN_NORTH: code = BTN_NORTH; break;  //X
-                case BTN_WEST: code = BTN_TL; break;  //L1
-                case BTN_SELECT:   code = BTN_TL2;    break; //L2
-                case BTN_Z:   code = BTN_TR;    break; //R1
-                case BTN_START:   code = BTN_TR2;    break; //R2
-                case BTN_TR:   code = BTN_START;    break; //Start
-                case BTN_TL:   code = BTN_SELECT;    break; //Select
-                case KEY_GOTO:   code = BTN_MODE;    break; //Menu
+                case BTN_WEST:  code = BTN_TL;   break;  //LB
+                case BTN_SELECT: code = BTN_TL2; break;  //L2
+                case BTN_Z:     code = BTN_TR;   break;  //RB
+                case BTN_START: code = BTN_TR2;  break;  //R2
+                case BTN_TR:    code = BTN_START; break; //Start
+                case BTN_TL:    code = BTN_SELECT; break; //Select
+                case KEY_GOTO:  code = BTN_MODE; break;   //Guide
             }
             emit(ufd, EV_KEY, code, ev.value);
         }
         else if (ev.type == EV_ABS) {
-            if (ev.code == ABS_HAT0X) {
-                emit(ufd, EV_ABS, ABS_HAT0X, ev.value); // keep axis
-                emit(ufd, EV_KEY, BTN_DPAD_LEFT,  (ev.value < 0) ? 1 : 0);
-                emit(ufd, EV_KEY, BTN_DPAD_RIGHT, (ev.value > 0) ? 1 : 0);
-            }
-            else if (ev.code == ABS_HAT0Y) {
-                emit(ufd, EV_ABS, ABS_HAT0Y, ev.value); // keep axis
-                emit(ufd, EV_KEY, BTN_DPAD_UP,   (ev.value < 0) ? 1 : 0);
-                emit(ufd, EV_KEY, BTN_DPAD_DOWN, (ev.value > 0) ? 1 : 0);
+            switch (ev.code) {
+                case ABS_X:
+                case ABS_Y:
+                case ABS_RX:
+                case ABS_RY:
+                case ABS_Z:
+                case ABS_RZ:
+                    emit(ufd, EV_ABS, ev.code, ev.value);
+                    break;
+
+                case ABS_HAT0X:
+                    emit(ufd, EV_ABS, ABS_HAT0X, ev.value);
+                    emit(ufd, EV_KEY, BTN_DPAD_LEFT,  (ev.value < 0) ? 1 : 0);
+                    emit(ufd, EV_KEY, BTN_DPAD_RIGHT, (ev.value > 0) ? 1 : 0);
+                    break;
+
+                case ABS_HAT0Y:
+                    emit(ufd, EV_ABS, ABS_HAT0Y, ev.value);
+                    emit(ufd, EV_KEY, BTN_DPAD_UP,   (ev.value < 0) ? 1 : 0);
+                    emit(ufd, EV_KEY, BTN_DPAD_DOWN, (ev.value > 0) ? 1 : 0);
+                    break;
             }
         }
 
