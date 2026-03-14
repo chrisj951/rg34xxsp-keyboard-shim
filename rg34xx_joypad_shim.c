@@ -146,12 +146,11 @@ int main()
 
                 // D-pad logic simplified
                 case ABS_HAT0X:
-                    emit(ufd, EV_ABS, ABS_HAT0X, ev.value);
-                    break;
-
                 case ABS_HAT0Y:
-                    emit(ufd, EV_ABS, ABS_HAT0Y, ev.value);
+                    // Scale -1, 0, 1 to full 16-bit range for linuxraw/joydev
+                    emit(ufd, EV_ABS, ev.code, ev.value * 32767);
                     break;
+                
             }
         }
 
