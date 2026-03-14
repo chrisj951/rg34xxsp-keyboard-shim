@@ -1,5 +1,4 @@
 // rg34xx_joypad_shim.c
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -50,8 +49,12 @@ int setup_uinput()
         BTN_SELECT,  // Back
         BTN_START,   // Start
         BTN_MODE,    // Guide
-        BTN_THUMBL,  // Left stick press
-        BTN_THUMBR   // Right stick press
+        BTN_THUMBL,  // L3
+        BTN_THUMBR,  // R3
+        BTN_DPAD_UP,
+        BTN_DPAD_DOWN,
+        BTN_DPAD_LEFT,
+        BTN_DPAD_RIGHT
     };
 
     for (size_t i = 0; i < sizeof(buttons)/sizeof(buttons[0]); i++)
@@ -59,10 +62,9 @@ int setup_uinput()
 
     /* Axes */
     int axes[] = {
-        ABS_X, ABS_Y,
-        ABS_RX, ABS_RY,
-        ABS_Z, ABS_RZ,
-        ABS_HAT0X, ABS_HAT0Y
+        ABS_X, ABS_Y,   // Left stick
+        ABS_RX, ABS_RY, // Right stick
+        ABS_Z, ABS_RZ   // Triggers
     };
 
     for (size_t i = 0; i < sizeof(axes)/sizeof(axes[0]); i++)
@@ -82,30 +84,20 @@ int setup_uinput()
     /* Left stick */
     uidev.absmin[ABS_X] = -32768;
     uidev.absmax[ABS_X] = 32767;
-
     uidev.absmin[ABS_Y] = -32768;
     uidev.absmax[ABS_Y] = 32767;
 
     /* Right stick */
     uidev.absmin[ABS_RX] = -32768;
     uidev.absmax[ABS_RX] = 32767;
-
     uidev.absmin[ABS_RY] = -32768;
     uidev.absmax[ABS_RY] = 32767;
 
     /* Triggers */
     uidev.absmin[ABS_Z] = 0;
     uidev.absmax[ABS_Z] = 255;
-
     uidev.absmin[ABS_RZ] = 0;
     uidev.absmax[ABS_RZ] = 255;
-
-    /* D‑pad */
-    uidev.absmin[ABS_HAT0X] = -1;
-    uidev.absmax[ABS_HAT0X] = 1;
-
-    uidev.absmin[ABS_HAT0Y] = -1;
-    uidev.absmax[ABS_HAT0Y] = 1;
 
     if (write(fd, &uidev, sizeof(uidev)) < 0) {
         perror("write uinput_user_dev");
@@ -140,18 +132,30 @@ int main()
 
     while (1) {
         int rd = read(ifd, &ev, sizeof(ev));
+        if (rd != sizeof(ev))
+            continue;
 
-        if (rd == sizeof(ev)) {
-            if (ev.type == EV_KEY || ev.type == EV_ABS) {
-                emit(ufd, ev.type, ev.code, ev.value);
-                emit(ufd, EV_SYN, SYN_REPORT, 0);
+        if (ev.type == EV_KEY) {
+            emit(ufd, ev.type, ev.code, ev.value);
+        }
+        else if (ev.type == EV_ABS) {
+            /* Map D-pad axes to buttons */
+            if (ev.code == ABS_HAT0X) {
+                emit(ufd, EV_KEY, (ev.value < 0) ? BTN_DPAD_LEFT  : 0, (ev.value < 0));
+                emit(ufd, EV_KEY, (ev.value > 0) ? BTN_DPAD_RIGHT : 0, (ev.value > 0));
+            } else if (ev.code == ABS_HAT0Y) {
+                emit(ufd, EV_KEY, (ev.value < 0) ? BTN_DPAD_UP    : 0, (ev.value < 0));
+                emit(ufd, EV_KEY, (ev.value > 0) ? BTN_DPAD_DOWN  : 0, (ev.value > 0));
+            } else {
+                emit(ufd, EV_ABS, ev.code, ev.value);
             }
         }
+
+        emit(ufd, EV_SYN, SYN_REPORT, 0);
     }
 
     ioctl(ufd, UI_DEV_DESTROY);
     close(ufd);
     close(ifd);
-
     return 0;
 }
