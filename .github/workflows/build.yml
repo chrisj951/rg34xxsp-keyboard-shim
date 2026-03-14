@@ -1,0 +1,33 @@
+name: Build ARM64 Joypad Shim
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-arm64:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install ARM64 cross-compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu make
+
+      - name: Build joypad_shim
+        run: |
+          aarch64-linux-gnu-gcc -O2 -o joypad_shim rg34xx_joypad_shim.c
+
+      - name: Verify build
+        run: |
+          file joypad_shim
+
+      - name: Upload ARM64 binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: joypad_shim
+          path: ./joypad_shim
