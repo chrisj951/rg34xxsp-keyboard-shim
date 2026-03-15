@@ -43,7 +43,9 @@ int setup_uinput()
         BTN_SOUTH, BTN_EAST, BTN_NORTH, BTN_WEST,
         BTN_TL, BTN_TR, BTN_TL2, BTN_TR2,
         BTN_SELECT, BTN_START, BTN_MODE,
-        BTN_THUMBL, BTN_THUMBR
+        BTN_THUMBL, BTN_THUMBR,
+        BTN_DPAD_UP, BTN_DPAD_DOWN,
+        BTN_DPAD_LEFT, BTN_DPAD_RIGHT
     };
     for (int i = 0; i < sizeof(buttons)/sizeof(buttons[0]); i++)
         ioctl(fd, UI_SET_KEYBIT, buttons[i]);
@@ -146,7 +148,13 @@ int main()
 
                 // D-pad logic simplified
                 case ABS_HAT0X:
+                    emit(ufd, EV_KEY, BTN_DPAD_LEFT,  (ev.value < 0) ? 1 : 0);
+                    emit(ufd, EV_KEY, BTN_DPAD_RIGHT, (ev.value > 0) ? 1 : 0);
+                    emit(ufd, EV_ABS, ev.code, ev.value * 32767);
+                    break;
                 case ABS_HAT0Y:
+                    emit(ufd, EV_KEY, BTN_DPAD_UP,   (ev.value < 0) ? 1 : 0);
+                    emit(ufd, EV_KEY, BTN_DPAD_DOWN, (ev.value > 0) ? 1 : 0);                
                     // Scale -1, 0, 1 to full 16-bit range for linuxraw/joydev
                     emit(ufd, EV_ABS, ev.code, ev.value * 32767);
                     break;
